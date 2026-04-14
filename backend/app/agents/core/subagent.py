@@ -1,0 +1,527 @@
+import logging
+import uuid
+import asyncio
+from abc import ABC
+from typing import Any, Dict, List, Optional, Tuple
+from app.agents.bus.queues import MESSAGE_BUS
+from app.agents.bus.types import InboundMessage
+from app.agents.core.base import AgentState, ToolChoice, extract_stream_tool_calls
+from app.agents.sessions.compaction import SessionCompaction
+from app.agents.tools.factory import ToolsFactory,register_tools_by_config
+from app.agents.sessions.message import Message, Role, ToolCall
+from app.agents.sessions.session import Session
+from app.infrastructure.llms.chat_models.factory import llm_factory
+from app.infrastructure.llms.chat_models.schemes import TokenUsage
+
+
+SUBAGENT_TOOLS_CONFIG={
+    "tools":{
+        "ask_question":"deny",
+        "terminate":"deny",
+        "read_file":"allow",
+        "write_file":"allow",
+        "replace_file_text":"allow",
+        "insert_file":"allow",
+        "multi_replace_text":"allow",
+        "glob_search":"allow",
+        "grep_search":"allow",
+        "read_dir":"allow",
+        "exec":"allow",
+        "list_code_files":"deny",
+        "apply_patch":"deny",
+        "code_similar_search":"deny",
+        "code_related_files_search":"deny",
+        "code_dependencies_search":"deny",
+        "lsp":"deny",
+        "code_shell":"deny",
+        "todo_read":"deny",
+        "todo_write":"deny",
+        "batch_tools":"deny",
+        "web_search":"allow",
+        "web_fetch":"allow",
+        "cron":"deny",
+        "spawn":"deny",
+    },
+}
+SUBAGENT_USABLE_TOOL_NAMES=[
+    str(n)
+    for n, d in SUBAGENT_TOOLS_CONFIG["tools"].items()
+    if str(d).strip().lower()=="allow"
+]
+
+
+class SubAgentManager(ABC):
+    """SubAgent 管理器"""
+    
+    def __init__(
+        self,
+        user_id: str,
+        parent_agent_type: str,
+        session_id: str,
+        channel_type: str,
+        channel_id: str,
+        workspace_path: str,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        **kwargs: Any,
+    ):
+
+        # 基本信息
+        self.user_id = user_id
+        self.parent_agent_type = parent_agent_type
+        self.session_id = session_id
+        self.channel_type = channel_type
+        self.channel_id = channel_id
+        self.workspace_path = workspace_path
+
+        # 模型信息
+        self.llm_provider = llm_provider or ""
+        self.llm_model = llm_model or ""
+        self.temperature = temperature or 0.7
+
+        self.params = kwargs
+
+        # 运行任务信息
+        self._running_tasks: Dict[str, asyncio.Task] = {}
+
+    async def start_task(
+        self,
+        task: str,
+        *,
+        mode: str = "sync",
+        label: str | None = None,
+    ) -> str:
+        """
+        启动子任务。sync 模式阻塞等待结果；async 模式后台执行并异步通知用户。
+        """
+        task_id = str(uuid.uuid4())[:8]
+        display_label = label or task[:30] + ("..." if len(task) > 30 else "")
+
+        # 作业模式
+        normalized_mode = (mode or "sync").strip().lower()
+        if normalized_mode not in {"sync", "async"}:
+            raise ValueError("spawn mode must be 'sync' or 'async'")
+
+        # 同步SubAgent执行模式
+        if normalized_mode == "sync":
+            result = await self._run_subagent_task(task_id=task_id, task=task, label=display_label)
+            return self._format_result_text(task_id=task_id, label=display_label, result=result)
+        else:
+            # 异步SubAgent执行模式
+            bg_task = asyncio.create_task(
+                self._run_subagent_task(task_id=task_id, task=task, label=display_label)
+            )
+            self._running_tasks[task_id] = bg_task
+            bg_task.add_done_callback(lambda _: self._running_tasks.pop(task_id, None))
+            bg_task.add_done_callback(
+                lambda t: asyncio.create_task(self._notify_async_result(task_id=task_id, label=display_label, fut=t))
+            )
+            logging.info("Started async subagent [%s]: %s", task_id, display_label)
+            return f"Subagent [{display_label}] started asynchronously (id: {task_id})."
+
+    async def _run_subagent_task(self, task_id: str, task: str, label: str) -> Dict[str, Any]:
+        subagent = SubAgent(
+            user_id=self.user_id,
+            session_id=self.session_id,
+            channel_type=self.channel_type,
+            channel_id=self.channel_id,
+            workspace_path=self.workspace_path,
+            parent_agent_type=self.parent_agent_type,
+            llm_provider=self.llm_provider,
+            llm_model=self.llm_model,
+            temperature=self.temperature,
+            **self.params,
+        )
+        result = await subagent.run(task_id, task, label)
+        return result
+
+    async def _notify_async_result(self, task_id: str, label: str, fut: asyncio.Task) -> None:
+        try:
+            result = fut.result()
+            content = self._format_subagent_result(task_id=task_id, label=label, result=result)
+            inbound_msg = InboundMessage(
+                channel_type=self.channel_type,
+                channel_id=self.channel_id,
+                user_id=self.user_id,
+                session_id=self.session_id,
+                agent_type=self.parent_agent_type,
+                content=content,
+                llm_provider=self.llm_provider,
+                llm_model=self.llm_model,
+                is_internal=True,
+            )
+            await MESSAGE_BUS.push_inbound(inbound_msg)
+        except Exception as e:
+            content = self._format_subagent_result(
+                task_id=task_id,
+                label=label,
+                result={"task_id": task_id, "task": "", "status": False, "result": f"Error: {e}"},
+            )
+            inbound_msg = InboundMessage(
+                channel_type=self.channel_type,
+                channel_id=self.channel_id,
+                user_id=self.user_id,
+                session_id=self.session_id,
+                agent_type=self.parent_agent_type,
+                content=content,
+                llm_provider=self.llm_provider,
+                llm_model=self.llm_model,
+                is_internal=True,
+            )
+            await MESSAGE_BUS.push_inbound(inbound_msg)
+
+    @staticmethod
+    def _format_subagent_result(task_id: str, label: str, result: Dict[str, Any]) -> str:
+        status = "completed successfully" if result.get("status") else "failed"
+        body = (result.get("result") or "").strip() or "(empty result)"
+        return (
+            f"[Subagent '{label}' {status}] (id: {task_id})\n\n"
+            f"Task: {result.get('task') or ''}\n\n"
+            f"Result:\n{body}"
+        )
+
+class SubAgent(ABC):
+    """SubAgent 执行类，属性仅在 __init__ 内通过 self 赋值。"""
+
+    def __init__(
+        self,
+        user_id: str,
+        session_id: str,
+        channel_type: str,
+        channel_id: str,
+        workspace_path: str,
+        parent_agent_type: str,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        **kwargs: Any,
+    ):
+
+        # 基本信息
+        self.user_id = user_id
+        self.session_id = session_id
+        self.channel_type = channel_type
+        self.channel_id = channel_id
+        self.workspace_path = workspace_path
+        self.parent_agent_type = parent_agent_type
+
+        # 提示词信息
+        self.system_prompt = "You are subagent, a helpful assistant."
+        self.user_prompt = ""
+        self.next_step_prompt = "Please continue your work."
+
+        # 模型信息
+        self.llm_provider = llm_provider or ""
+        self.llm_model = llm_model or ""
+        self.temperature = temperature or 0.7
+
+        self.params = kwargs
+
+        # 执行步数相关
+        self._state = AgentState.IDLE
+        self._current_step = 0
+        self._max_steps = 20
+        self._max_duplicate_steps = 2   # 最大重复次数，用于检验当前项agent是否挂死
+
+        # 工具信息
+        self.available_tools = ToolsFactory(workspace_path=self.workspace_path)
+        self.tool_choices = ToolChoice.AUTO
+        self._register_tools()
+        self.history_messages: List[Message] = []
+        self.compaction: Optional[Message] = None
+        self.last_compacted: int = 0
+
+    def reset(self):
+        """重置 agent 状态到初始状态
+        
+        重置以下内容：
+        - 状态设置为 IDLE
+        - 当前步数归零
+        """
+        try:
+            self._state = AgentState.IDLE
+            self._current_step = 0
+            self.history_messages = []
+            self.compaction = None
+            self.last_compacted = 0
+        except Exception as e:
+            logging.error(f"Error in agent reset: {str(e)}")
+            raise e
+
+    def _register_tools(self) -> None:
+        """SubAgent 工具根据内置配置注册，不注册 SpawnTool。"""
+        register_tools_by_config(
+            usable_tool_names=SUBAGENT_USABLE_TOOL_NAMES,
+            tools_factory=self.available_tools,
+            agent_type="SubAgent",
+            session_id=self.session_id,
+            user_id=self.user_id,
+            channel_id=self.channel_id,
+            channel_type=self.channel_type,
+            subagent_manager=None,
+            params=self.params,
+        )
+
+    def _build_subagent_prompt(self) -> str:
+        """子 Agent 专用 system prompt：身份、当前时间、能做/不能做、workspace 路径（具体任务由 question 传入）。"""
+        from datetime import datetime
+        import time as _time
+        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        tz = _time.strftime("%Z") or "UTC"
+
+        return f"""# Subagent
+
+## Current Time
+{now} ({tz})
+
+You are a subagent spawned by the main agent to complete a specific task.
+
+## Rules
+1. Stay focused - complete only the assigned task, nothing else
+2. Your final response will be reported back to the main agent
+3. Do not initiate conversations or take on side tasks
+4. Be concise but informative in your findings
+5. Prefer tool use over speculation; verify key claims with concrete evidence
+6. If blocked, state what failed, why, and the smallest next action needed
+
+## What You Can Do
+- Read and write files in the workspace
+- Execute shell commands
+- Search the web and fetch web pages
+- Complete the task thoroughly
+
+## What You Cannot Do
+- Send messages directly to users (no message tool available)
+- Spawn other subagents
+- Access the main agent's conversation history
+
+## Output Contract
+- Start with outcome status: Completed / Partially Completed / Blocked
+- Then include: key findings, files/commands touched, and unresolved risks
+- Keep raw logs minimal; summarize first and include only necessary details
+
+## Agent Workspace
+Your agent workspace is at: {self.workspace_path}
+
+When done, return a structured, evidence-based summary aligned with the Output Contract."""
+
+    def handle_stuck_state(self):
+        """Handle stuck state by adding a prompt to change strategy"""
+        stuck_prompt = "\
+        Observed duplicate responses. Consider new strategies and avoid repeating ineffective paths already attempted."
+        self.next_step_prompt = f"{stuck_prompt}\n{self.next_step_prompt}"
+        logging.warning(f"Agent detected stuck state. Added prompt: {stuck_prompt}")
+
+    async def is_stuck(self) -> bool:
+        """Check if the agent is stuck in a loop by detecting duplicate content in history_messages."""
+        if len(self.history_messages) < 2:
+            return False
+        last_message = self.history_messages[-1]
+        if not (last_message.content or "").strip():
+            return False
+        duplicate_count = sum(
+            1
+            for msg in reversed(self.history_messages[:-1])
+            if msg.role == Role.ASSISTANT and (msg.content or "") == (last_message.content or "")
+        )
+        return duplicate_count >= self._max_duplicate_steps
+
+    async def run(self, task_id: str, task: str, label: str) -> Dict[str, Any]:
+        """Run the agent
+        
+        Args:
+            task_id: Task ID
+            label: Label for the task
+            task: Input task
+            
+        Returns:
+            None
+        """
+        # 检查并重置状态
+        if self._state != AgentState.IDLE:
+            logging.warning(f"Agent is busy with state {self._state}, resetting...")
+            self.reset()
+        
+        # 设置运行状态
+        self._state = AgentState.RUNNING
+
+        original_task = task
+        llm = llm_factory.create_model(provider=self.llm_provider, model=self.llm_model)
+        try:
+            # 构建提示词
+            self.system_prompt = self._build_subagent_prompt()
+
+            content = ""
+            is_add_user_message = False
+            context_overflow_recovered = False
+            while (self._current_step < self._max_steps and self._state != AgentState.FINISHED):
+                self._current_step += 1
+
+                # 模型思考和工具调度
+                content, tool_calls, usage = await self.think(llm, task)
+                if tool_calls:
+                    if not is_add_user_message:
+                        self.history_messages.append(Message.user_message(original_task))
+                        is_add_user_message = True
+                    self.history_messages.append(Message.tool_call_message(content, tool_calls=tool_calls))
+                    await self.act(tool_calls)
+                else:
+                    if not is_add_user_message:
+                        self.history_messages.append(Message.user_message(original_task))
+                        is_add_user_message = True
+                    if self._is_context_overflow_content(content) and not context_overflow_recovered:
+                        await self._handle_context_overflow(usage, llm, force=True)
+                        context_overflow_recovered = True
+                        continue
+                    self.history_messages.append(Message.assistant_message(content))
+                    break
+
+                await self._handle_context_overflow(usage, llm)
+
+                # 检查模型是否进行死循环
+                if await self.is_stuck():
+                    self.handle_stuck_state()
+
+                # 继续下一步
+                task = self.next_step_prompt
+
+            # 检查终止原因并重置状态
+            if self._current_step >= self._max_steps:
+                content += f"\n\n Terminated: Reached max steps ({self._max_steps})"
+     
+            return {
+                "task_id": task_id,
+                "label": label,
+                "task": original_task,
+                "status": True,
+                "result": content,
+            }
+        except Exception as e:
+            self._state = AgentState.ERROR
+            err = f"Error in agent execution: {str(e)}"
+            self.history_messages.append(Message.assistant_message(err))
+            return {
+                "task_id": task_id,
+                "label": label,
+                "task": original_task,
+                "status": False,
+                "result": err,
+            }
+        finally:
+            self.reset()
+
+    async def think(self, llm: Any, question: str) -> Tuple[str, List[ToolCall], TokenUsage]:
+        """Think about the question"""
+        history = self._build_session_for_context()
+        tool_calls: List[ToolCall] = []
+        try:
+            if self.tool_choices == ToolChoice.NONE:
+                stream, usage = await llm.chat_stream(
+                    system_prompt=self.system_prompt,
+                    user_prompt=self.user_prompt,
+                    user_question=question,
+                    history=history,
+                    temperature=self.temperature,
+                )
+                chunks: List[str] = []
+                async for chunk in stream:
+                    chunks.append(chunk)
+                content = "".join(chunks)
+                return content, tool_calls, usage
+            else:
+                stream, usage = await llm.ask_tools_stream(
+                    system_prompt=self.system_prompt,
+                    user_prompt=self.user_prompt,
+                    user_question=question,
+                    history=history,
+                    tools=self.available_tools.to_params(),
+                    tool_choice=self.tool_choices.value,
+                    temperature=self.temperature,
+                )
+                chunks: List[str] = []
+                async for chunk in stream:
+                    chunks.append(chunk)
+                stream_text = "".join(chunks)
+                content, tool_calls = extract_stream_tool_calls(stream_text)
+
+                if not tool_calls and self.tool_choices == ToolChoice.REQUIRED:
+                    raise ValueError("Tool calls required but none provided")
+
+                return content, tool_calls, usage
+
+        except Exception as e:
+            logging.error(f"Error in subagent think process: %s", e)
+            raise RuntimeError(str(e))
+
+    async def act(self, tool_calls: List[ToolCall]) -> None:
+        """Execute tool calls and handle their results"""
+        try:
+            for toolcall in tool_calls:
+                content, meta = await self.execute_tool(toolcall)
+                self.history_messages.append(
+                    Message.tool_result_message(content, toolcall.function.name, toolcall.id, metadata=meta)
+                )
+        except Exception as e:
+            logging.error(f"Error in subagent act process: %s", e)
+            raise RuntimeError(str(e))
+
+    async def execute_tool(self, toolcall: ToolCall) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """执行单次工具调用"""
+        if not toolcall or not toolcall.function:
+            raise ValueError("Invalid tool call format")
+            
+        name = toolcall.function.name
+        try:
+            args = dict(toolcall.function.arguments or {})
+            tool_result = await self.available_tools.execute(tool_name=name, tool_params=args)
+            return (f"{tool_result.result}", getattr(tool_result, "metadata", None))
+        except Exception as e:
+            logging.error(f"Tool({name}) execution error: {str(e)}")
+            raise RuntimeError(f"Tool({name}) execution error: {str(e)}") 
+    
+    def _is_context_overflow_content(self, content: str) -> bool:
+        if not content:
+            return False
+        return "context_overflow" in content.lower()
+
+    def _build_session_for_context(self) -> List[Dict[str, Any]]:
+        context = Session(
+            session_id=self.session_id,
+            agent_type="SubAgent",
+            user_id=self.user_id,
+            llm_provider=self.llm_provider,
+            llm_model=self.llm_model,
+            messages=self.history_messages,
+            compaction=self.compaction,
+            last_compacted=self.last_compacted,
+        ).to_context()
+        return context
+
+    async def _handle_context_overflow(self, usage: TokenUsage, llm: Any, force: bool = False) -> None:
+        if SessionCompaction.is_overflow(usage=usage, llm=llm) or force:
+            await self._compact_history(llm, keep_last_n=4)
+        await self._prune_history()
+
+    async def _compact_history(self, llm: Any, keep_last_n: int = 0) -> bool:
+        if not self.history_messages:
+            return True
+        compact_until = max(0, len(self.history_messages) - max(0, keep_last_n))
+        start = self.last_compacted if (self.compaction is not None and self.last_compacted > 0) else 0
+        if compact_until <= start:
+            return True
+        to_summarize = self.history_messages[start:compact_until]
+        if not to_summarize:
+            return True
+        previous_summary = self.compaction.content if self.compaction is not None else ""
+        summary_message = await SessionCompaction.compact(llm=llm, messages=to_summarize, previous_summary=previous_summary)
+        if summary_message is None or not (summary_message.content or "").strip():
+            return False
+        self.compaction = summary_message
+        self.last_compacted = compact_until
+        return True
+
+    async def _prune_history(self) -> int:
+        start = self.last_compacted if (self.compaction is not None and self.last_compacted > 0) else 0
+        scan = self.history_messages[start:]
+        return SessionCompaction.prune(scan)
