@@ -54,9 +54,9 @@ app.include_router(websocket_router, prefix="/api/v1", tags=["WebSocket Channel"
 # 配置CORS中间件 - 直接使用FastAPI内置的CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应该指定具体域名
+    allow_origins=["*"], # 生产环境应该指定具体域名
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["*"], 
     allow_headers=["*"],
 )
 

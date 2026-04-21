@@ -8,7 +8,7 @@ MCP_SERVERS_FILENAME = "mcp_servers.json"
 USABLE_TOOLS_FILENAME = "usable_tools.json"
 USABLE_SKILLS_FILENAME = "usable_skills.json"
 
-AGENTS_ROOT_PATH = Path(PROJECT_BASE_DIR) / "app" / "agents" / ".agent"
+AGENTS_ROOT_PATH = get_runtime_data_dir / ".agent"
 WORKSPACE_ROOT_PATH = get_runtime_data_dir() / ".workspace"
 USER_ROOT_PATH = get_runtime_data_dir() / ".users"
 
