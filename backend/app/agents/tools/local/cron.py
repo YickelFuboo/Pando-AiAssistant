@@ -1,7 +1,7 @@
 """Cron 工具：增/删/改/查定时任务。"""
 from datetime import datetime
 from typing import Any, Dict, Optional
-from app.domains.cron import CRON_MANAGER, CronKind, CronPayload, CronSchedule
+from app.services.cron import CRON_MANAGER, CronKind, CronPayload, CronSchedule
 from app.agents.tools.base import BaseTool
 from app.agents.tools.schemes import ToolResult, ToolSuccessResult, ToolErrorResult
 

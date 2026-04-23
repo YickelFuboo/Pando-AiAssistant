@@ -13,7 +13,7 @@ from app.infrastructure.database import Base, close_db, get_db_session, health_c
 from app.agents.bus.queues import MESSAGE_BUS
 from app.agents.tools.mcp.manager import MCP_POOL
 from app.channel.websocket.websocket import router as websocket_router
-from app.domains.cron import CRON_MANAGER
+from app.services.cron.manager import CRON_MANAGER
 from app.agents.api import router as agents_router
 from app.agents.sessions.api import router as sessions_router
 from app.infrastructure.llms.api import router as llms_router
