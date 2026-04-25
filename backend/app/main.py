@@ -9,6 +9,11 @@ from app.agents.sessions import models as _agent_session_models
 from app.logger import set_log_level, setup_logging
 from app.config.settings import settings, APP_NAME, APP_VERSION, APP_DESCRIPTION
 from app.middleware.logging import logging_middleware
+from app.infrastructure.storage import STORAGE_CONN
+from app.infrastructure.vector_store import VECTOR_STORE_CONN
+from app.infrastructure.redis import REDIS_CONN
+from app.utils.auth.jwt_middleware import create_jwt_middleware
+from app.infrastructure.celery.app import celery_app
 from app.infrastructure.database import Base, close_db, get_db_session, health_check_db
 from app.agents.bus.queues import MESSAGE_BUS
 from app.agents.tools.mcp.manager import MCP_POOL
@@ -17,6 +22,12 @@ from app.services.cron.manager import CRON_MANAGER
 from app.agents.api import router as agents_router
 from app.agents.sessions.api import router as sessions_router
 from app.infrastructure.llms.api import router as llms_router
+from app.services.code_analysis.api.git_repo_mgmt import router as git_repo_router
+from app.services.code_analysis.api.git_auth_mgmt import router as git_auth_router
+from app.services.code_analysis.api.code_search import router as code_search_router
+from app.services.code_analysis.api.code_analysis import router as code_analysis_router
+from app.services.code_analysis.services.file_analysis_service import FileAnalysisService
+from app.services.code_analysis.services.lsp.lsp_service import CodeLSPService
 
 
 # 创建FastAPI应用
@@ -46,6 +57,10 @@ app.include_router(llms_router, prefix="/api/v1", tags=["模型管理"])
 app.include_router(agents_router, prefix="/api/v1", tags=["Agent列表查询"])
 app.include_router(sessions_router, prefix="/api/v1", tags=["Agent 会话管理"])
 app.include_router(websocket_router, prefix="/api/v1", tags=["WebSocket Channel"])
+app.include_router(git_repo_router,prefix="/api/v1",tags=["Git仓库管理"])
+app.include_router(git_auth_router,prefix="/api/v1",tags=["Git认证信息管理"])
+app.include_router(code_analysis_router,prefix="/api/v1",tags=["代码仓分析"])
+app.include_router(code_search_router,prefix="/api/v1",tags=["代码检索"])
 
 
 #==================================
@@ -56,12 +71,24 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # 生产环境应该指定具体域名
     allow_credentials=True,
-    allow_methods=["*"], 
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # 配置日志中间件 - 直接使用全局中间件实例
 app.add_middleware(logging_middleware)
+
+# 添加JWT中间件到应用（需时取消注释）
+# app.middleware("http")(create_jwt_middleware())
+
+def run_celery_worker():
+    """在独立线程中运行 Celery Worker"""
+    try:
+        # 在debug模式下使用debug日志级别，否则使用info
+        log_level = 'debug' if settings.debug else 'info'
+        celery_app.worker_main(['worker', f'--loglevel={log_level}', '--concurrency=1', '-Q', 'document,default'])
+    except Exception as e:
+        logging.error(f"Celery Worker 启动失败: {e}")
 
 #==================================
 # 初始化基础设施
@@ -89,6 +116,12 @@ async def startup_event():
         else:
             logging.info("当前进程未启用 Cron (RUN_CRON=false)")
 
+        started = FileAnalysisService.start_global_scheduler()
+        if started:
+            logging.info("代码分析全局调度已启动")
+        else:
+            logging.info("代码分析全局调度已在运行")
+
         logging.info(f"{APP_NAME} v{APP_VERSION} 启动成功")
 
     except Exception as e:
@@ -113,10 +146,39 @@ async def shutdown_event():
         CRON_MANAGER.stop()
         logging.info("Cron 调度已停止")
 
+    await FileAnalysisService.stop_global_scheduler()
+    logging.info("代码分析全局调度已停止")
+    await CodeLSPService.close_all()
+    logging.info("代码分析LSP连接已停止")
+
     try:
         # 关闭数据库连接
         await close_db()
+        
+        # 关闭存储连接
+        if STORAGE_CONN and hasattr(STORAGE_CONN, 'close'):
+            try:
+                await STORAGE_CONN.close()
+            except Exception as e:
+                logging.warning(f"关闭存储连接时出错: {e}")
+        logging.info("存储连接已关闭")
 
+        # 关闭向量存储连接
+        if VECTOR_STORE_CONN and hasattr(VECTOR_STORE_CONN, 'close'):
+            try:
+                await VECTOR_STORE_CONN.close()
+            except Exception as e:
+                logging.warning(f"关闭向量存储连接时出错: {e}")
+        logging.info("向量存储连接已关闭")
+
+        # 关闭Redis连接
+        if REDIS_CONN and hasattr(REDIS_CONN, 'close'):
+            try:
+                await REDIS_CONN.close()
+            except Exception as e:
+                logging.warning(f"关闭Redis连接时出错: {e}")
+        logging.info("Redis连接已关闭")
+        
     except Exception as e:
         logging.error(f"关闭连接失败: {e}")
     
@@ -152,9 +214,27 @@ async def health_check():
         # 检查数据库连接健康状态
         db_healthy = await health_check_db()
         health_status["database"] = "healthy" if db_healthy else "unhealthy"
+
+        # 检查存储连接健康状态
+        storage_healthy = False
+        if STORAGE_CONN and hasattr(STORAGE_CONN, 'health_check'):
+            storage_healthy = await STORAGE_CONN.health_check()
+        health_status["storage"] = "healthy" if storage_healthy else "unhealthy"
+        
+        # 检查向量存储连接健康状态
+        vector_healthy = False
+        if VECTOR_STORE_CONN and hasattr(VECTOR_STORE_CONN, 'health_check'):
+            vector_healthy = await VECTOR_STORE_CONN.health_check()
+        health_status["vector_store"] = "healthy" if vector_healthy else "unhealthy"
+        
+        # 检查Redis连接健康状态
+        redis_healthy = False
+        if REDIS_CONN and hasattr(REDIS_CONN, 'health_check'):
+            redis_healthy = await REDIS_CONN.health_check()
+        health_status["redis"] = "healthy" if redis_healthy else "unhealthy"
         
         # 如果任何服务不健康，整体状态设为不健康
-        if not db_healthy:
+        if not db_healthy or not storage_healthy or not vector_healthy or not redis_healthy:
             health_status["status"] = "unhealthy"
                 
         return health_status

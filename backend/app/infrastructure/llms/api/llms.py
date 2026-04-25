@@ -5,7 +5,7 @@ import io
 import base64
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
-from app.infrastructure.llms import llm_factory, cv_factory, stt_factory, tts_factory
+from app.infrastructure.llms import llm_factory, cv_factory, embedding_factory, rerank_factory, stt_factory, tts_factory
 
 
 # 主路由
@@ -52,6 +52,28 @@ class ImageChatRequest(ModelRequest):
     user_question: str
 
 
+class EmbeddingRequest(ModelRequest):
+    """嵌入请求"""
+    texts: List[str]
+
+
+class EmbeddingResponse(BaseModel):
+    """嵌入响应"""
+    embeddings: List[List[float]]
+    token_count: int
+
+
+class RerankRequest(ModelRequest):
+    """重排序请求"""
+    query: str
+    texts: List[str]
+
+
+class RerankResponse(BaseModel):
+    """重排序响应"""
+    similarities: List[float]
+
+
 class TTSRequest(ModelRequest):
     """文本转语音请求"""
     text: str
@@ -67,6 +89,8 @@ async def get_all_models():
         return {
             "chat_models": llm_factory.get_supported_models(),
             "cv_models": cv_factory.get_supported_models(),
+            "embedding_models": embedding_factory.get_supported_models(),
+            "rerank_models": rerank_factory.get_supported_models(),
             "stt_models": stt_factory.get_supported_models(),
             "tts_models": tts_factory.get_supported_models(),
         }
@@ -84,6 +108,18 @@ async def get_chat_models():
 async def get_cv_models():
     """获取可用计算机视觉模型列表及默认模型。"""
     return cv_factory.get_supported_models()
+
+
+@router.get("/available/embedding", summary="获取可用嵌入模型列表")
+async def get_embedding_models():
+    """获取可用嵌入模型列表及默认模型。"""
+    return embedding_factory.get_supported_models()
+
+
+@router.get("/available/rerank", summary="获取可用重排序模型列表")
+async def get_rerank_models():
+    """获取可用重排序模型列表及默认模型。"""
+    return rerank_factory.get_supported_models()
 
 
 @router.get("/available/stt", summary="获取可用语音转文本模型列表")
@@ -233,6 +269,69 @@ async def image_chat_stream(request: ImageChatRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"图像流式聊天失败: {str(e)}")
+
+
+# ==================== 嵌入模型API ====================
+
+@router.post("/embedding/encode", response_model=EmbeddingResponse, summary="文本编码", tags=["嵌入模型"])
+async def encode_texts(request: EmbeddingRequest):
+    """文本编码接口"""
+    try:
+        model = embedding_factory.create_model(request.provider, request.model_name)
+        
+        if not model:
+            raise HTTPException(status_code=400, detail="无法创建模型实例")
+        
+        embeddings = await model.encode_texts(request.texts)
+        
+        return EmbeddingResponse(
+            embeddings=embeddings,
+            token_count=sum(len(text.split()) for text in request.texts)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文本编码失败: {str(e)}")
+
+
+@router.post("/embedding/encode-query", summary="查询文本编码", tags=["嵌入模型"])
+async def encode_query(request: ModelRequest, query: str = Form(...)):
+    """查询文本编码接口"""
+    try:
+        model = embedding_factory.create_model(request.provider, request.model_name)
+        
+        if not model:
+            raise HTTPException(status_code=400, detail="无法创建模型实例")
+        
+        embedding = await model.encode_query(query)
+        
+        return {
+            "embedding": embedding,
+            "token_count": len(query.split()),
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查询文本编码失败: {str(e)}")
+
+
+# ==================== 重排序模型API ====================
+
+@router.post("/rerank/similarity", response_model=RerankResponse, summary="相似度计算", tags=["重排序模型"])
+async def calculate_similarity(request: RerankRequest):
+    """相似度计算接口"""
+    try:
+        model = rerank_factory.create_model(request.provider, request.model_name)
+        
+        if not model:
+            raise HTTPException(status_code=400, detail="无法创建模型实例")
+        
+        similarities = await model.similarity(request.query, request.texts)
+        
+        return RerankResponse(
+            similarities=similarities
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"相似度计算失败: {str(e)}")
 
 
 # ==================== 语音转文本模型API ====================

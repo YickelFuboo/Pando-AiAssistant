@@ -76,9 +76,97 @@ class Settings(BaseSettings):
     # SQLite 配置
     sqlite_path: Optional[str] = Field(default=None, description="SQLite数据库文件路径(可选)，如 ./data/user.db 或 C:/data/user.db", env="SQLITE_PATH")
     
+    # 文件存储配置
+    storage_type: str = Field(default="minio", description="存储类型: minio, s3, local", env="STORAGE_TYPE")
+    
+    # MinIO 配置
+    minio_endpoint: str = Field(default="localhost:9000", description="MinIO端点", env="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="minioadmin", description="MinIO访问密钥", env="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(default="minioadmin", description="MinIO秘密密钥", env="MINIO_SECRET_KEY")
+    minio_secure: bool = Field(default=False, description="MinIO是否使用HTTPS", env="MINIO_SECURE")
+    
+    # S3 配置
+    s3_region: str = Field(default="us-east-1", description="S3区域", env="S3_REGION")
+    s3_endpoint_url: str = Field(default="https://your-s3-endpoint.com", description="S3端点URL", env="S3_ENDPOINT_URL")
+    s3_access_key_id: str = Field(default="your_access_key", description="S3访问密钥ID", env="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str = Field(default="your_secret_key", description="S3秘密访问密钥", env="S3_SECRET_ACCESS_KEY")
+    s3_use_ssl: bool = Field(default=True, description="S3是否使用SSL", env="S3_USE_SSL")
+    
+    # 本地存储配置
+    local_upload_dir: str = Field(default="./data/upload_files", description="本地上传目录", env="LOCAL_UPLOAD_DIR")
+    
+    # Azure Blob Storage SAS配置
+    azure_account_url: str = Field(default="https://yourstorageaccount.blob.core.windows.net", description="Azure存储账户URL", env="AZURE_ACCOUNT_URL")
+    azure_sas_token: str = Field(default="your_sas_token", description="Azure SAS令牌", env="AZURE_SAS_TOKEN")
+    
+    # Azure Blob Storage SPN配置
+    azure_spn_account_url: str = Field(default="https://yourstorageaccount.dfs.core.windows.net", description="Azure SPN存储账户URL", env="AZURE_SPN_ACCOUNT_URL")
+    azure_spn_client_id: str = Field(default="your_client_id", description="Azure SPN客户端ID", env="AZURE_SPN_CLIENT_ID")
+    azure_spn_client_secret: str = Field(default="your_client_secret", description="Azure SPN客户端密钥", env="AZURE_SPN_CLIENT_SECRET")
+    azure_spn_tenant_id: str = Field(default="your_tenant_id", description="Azure SPN租户ID", env="AZURE_SPN_TENANT_ID")
+    azure_spn_container_name: str = Field(default="your_container", description="Azure SPN容器名称", env="AZURE_SPN_CONTAINER_NAME")
+    
+    # OSS配置
+    oss_access_key: str = Field(default="your_access_key", description="OSS访问密钥ID", env="OSS_ACCESS_KEY")
+    oss_secret_key: str = Field(default="your_secret_key", description="OSS秘密访问密钥", env="OSS_SECRET_KEY")
+    oss_endpoint_url: str = Field(default="https://oss-cn-hangzhou.aliyuncs.com", description="OSS端点URL", env="OSS_ENDPOINT_URL")
+    oss_region: str = Field(default="cn-hangzhou", description="OSS区域", env="OSS_REGION")
+    oss_prefix_path: str = Field(default="", description="OSS前缀路径", env="OSS_PREFIX_PATH")
+    
+    # Redis配置
+    redis_host: str = Field(default="localhost", description="Redis主机地址", env="REDIS_HOST")
+    redis_port: int = Field(default=6379, description="Redis端口", env="REDIS_PORT")
+    redis_db: int = Field(default=0, description="Redis数据库编号", env="REDIS_DB")
+    redis_password: Optional[str] = Field(default=None, description="Redis密码", env="REDIS_PASSWORD")
+    redis_ssl: bool = Field(default=False, description="是否使用SSL连接", env="REDIS_SSL")
+    redis_decode_responses: bool = Field(default=True, description="是否自动解码响应", env="REDIS_DECODE_RESPONSES")
+    redis_socket_connect_timeout: int = Field(default=5, description="连接超时时间(秒)", env="REDIS_SOCKET_CONNECT_TIMEOUT")
+    redis_socket_timeout: int = Field(default=5, description="读写超时时间(秒)", env="REDIS_SOCKET_TIMEOUT")
+    redis_retry_on_timeout: bool = Field(default=True, description="超时时是否重试", env="REDIS_RETRY_ON_TIMEOUT")
+    redis_max_connections: int = Field(default=5, description="每个数据库的最大连接数", env="REDIS_MAX_CONNECTIONS")
+
+
+    # =============================================================================
+    # 向量存储配置 - Vector Store
+    # =============================================================================
+    # 向量存储引擎类型 (elasticsearch, opensearch)
+    vector_store_engine: str = Field(default="elasticsearch", description="向量存储引擎类型", env="VECTOR_STORE_ENGINE")
+    # 向量存储映射文件名称
+    vector_store_mapping: str = Field(default="es_doc_mapping.json", description="向量存储映射文件名称", env="VECTOR_STORE_MAPPING")
+    
+    # Elasticsearch配置
+    es_hosts: str = Field(default="https://localhost:9200", description="Elasticsearch主机地址", env="ES_HOSTS")
+    es_username: str = Field(default="elastic", description="Elasticsearch用户名", env="ES_USERNAME")
+    es_password: str = Field(default="changeme", description="Elasticsearch密码", env="ES_PASSWORD")
+    es_verify_certs: bool = Field(default=False, description="是否校验 ES 服务端证书，本地 HTTPS 自签证书可设为 False", env="ES_VERIFY_CERTS")
+    
+    # OpenSearch配置
+    os_hosts: str = Field(default="http://localhost:9200", description="OpenSearch主机地址", env="OS_HOSTS")
+    os_username: str = Field(default="admin", description="OpenSearch用户名", env="OS_USERNAME")
+    os_password: str = Field(default="admin", description="OpenSearch密码", env="OS_PASSWORD")
+
+    # =============================================================================
+    # 图数据库配置
+    # =============================================================================
+    neo4j_uri: str = Field(default="neo4j://localhost:7687", description="图数据库URI", env="NEO4J_URI")
+    neo4j_user: str = Field(default="neo4j", description="图数据库用户名", env="NEO4J_USER")
+    neo4j_password: str = Field(default="neo4jneo4j", description="图数据库密码", env="NEO4J_PASSWORD")
+    neo4j_pool_size: int = Field(default=5, description="连接池大小", env="NEO4J_POOL_SIZE")
+    neo4j_max_overflow: int = Field(default=10, description="最大溢出连接数", env="NEO4J_MAX_OVERFLOW")
+
+
     # =============================================================================
     # 模型配置说明 见：app/config/xxx.json
     # =============================================================================
+
+    # =============================================================================
+    # 代码仓分析 - 行切片（codechunk/code_chunk）
+    # =============================================================================
+    lsp_enabled: bool = Field(default=True, description="是否启用内置 LSP 客户端", env="LSP_ENABLED")
+    code_analysis_line_chunk_target_lines: int = Field(default=5, description="行切片目标窗口行数", env="CODE_ANALYSIS_LINE_CHUNK_TARGET_LINES")
+    code_analysis_line_chunk_overlap_lines: int = Field(default=1, description="行切片滑动重叠行数", env="CODE_ANALYSIS_LINE_CHUNK_OVERLAP_LINES")
+    code_analysis_line_chunk_max_lines: int = Field(default=200, description="单行切片经扩展后的最大行数上限", env="CODE_ANALYSIS_LINE_CHUNK_MAX_LINES")
+    code_analysis_symbol_summary_llm_concurrency: int = Field(default=4, ge=1, le=32, description="符号摘要阶段调用 LLM 的并发上限（单文件内多符号）", env="CODE_ANALYSIS_SYMBOL_SUMMARY_LLM_CONCURRENCY")
 
     # =============================================================================
     # Web搜索配置 - Web Search
@@ -133,6 +221,13 @@ class Settings(BaseSettings):
             norm_path = normalize_path(abs_path)
             return f"sqlite+aiosqlite:///{norm_path}"
     
+    @property
+    def redis_url(self) -> str:
+        """生成Redis连接URL"""
+        if self.redis_password:
+            return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
+        return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
     @property
     def app_name(self) -> str:
         """应用名称(用于JWT issuer等)"""
