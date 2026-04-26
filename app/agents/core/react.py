@@ -14,7 +14,7 @@ from app.infrastructure.llms.chat_models.schemes import TokenUsage
 from app.agents.core.context import ContextBuilder
 from app.agents.memorys.manager import MemoryManager
 from app.agents.core.subagent import SubAgentManager
-from app.agents.contants import AGENTS_ROOT_PATH, MCP_SERVERS_FILENAME, USABLE_TOOLS_FILENAME
+from app.agents.contants import AGENT_MCP_SERVERS_FILE, AGENT_USABLE_TOOLS_FILE
 from app.config.settings import settings
 
 
@@ -28,6 +28,7 @@ class ReActAgent(BaseAgent):
         channel_id: str,
         session_id: str,
         user_id: str,
+        workspace_dir: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
@@ -45,6 +46,7 @@ class ReActAgent(BaseAgent):
             channel_id=channel_id,
             session_id=session_id,
             user_id=user_id,
+            workspace_dir=workspace_dir,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             next_step_prompt=next_step_prompt,
@@ -80,7 +82,7 @@ class ReActAgent(BaseAgent):
 
     def _register_tools(self) -> None:
         """根据 .agent/{agent_type}/usable_tools.json 注册工具，仅注册配置中列出的项。"""
-        config_path = Path(self.agent_path) / USABLE_TOOLS_FILENAME
+        config_path = Path(self.agent_config_dir) / AGENT_USABLE_TOOLS_FILE
         if not config_path.is_file():
             return
         try:
@@ -113,7 +115,7 @@ class ReActAgent(BaseAgent):
         if self._mcp_registered:
             return
         
-        config_path = Path(self.agent_path) / MCP_SERVERS_FILENAME
+        config_path = Path(self.agent_config_dir) / AGENT_MCP_SERVERS_FILE
         if not config_path.is_file():
             return
         try:
@@ -157,7 +159,7 @@ class ReActAgent(BaseAgent):
         context_builder = ContextBuilder(
             session_id=self.session_id,
             agent_type=self.agent_type,
-            agent_path=self.agent_path,
+            agent_config_dir=self.agent_config_dir,
             workspace_path=self.workspace_path,
             agent_description=self.description,
             skill_names=self.skill_names,
@@ -166,8 +168,9 @@ class ReActAgent(BaseAgent):
         memory_manager = MemoryManager(
             session_id=self.session_id,
             agent_type=self.agent_type,
-            agent_path=self.agent_path,
-            workspace_path=self.workspace_path,
+            agent_runtime_dir=self.agent_runtime_dir,
+            user_runtime_dir=self.user_runtime_dir,
+            workspace_runtime_dir=self.workspace_runtime_dir,
             agent_description=self.description,
             llm_provider=self.llm_provider,
             llm_model=self.llm_model,

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from typing import Any, Dict, Generic, List, Optional, Set, Tuple, Type, TypeVar
-from app.config.settings import get_runtime_config_dir
+from app.config.settings import MODELS_CONFIG_DIR
 
 
 DEFAULT_CACHE_TTL_SECONDS = 3600
@@ -35,7 +35,7 @@ class BaseModelFactory(ABC, Generic[T]):
         Args:
             config_filename: 配置文件名称
         """
-        self.config_path = str(get_runtime_config_dir() / config_filename)
+        self.config_path = str(MODELS_CONFIG_DIR / config_filename)
         self._config = None
         # 实例缓存
         self._instance_cache_lock = threading.Lock()

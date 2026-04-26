@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Dict, List
 from fastapi import Depends, HTTPException, status, Request
 from app.utils.auth.jwt_middleware import create_jwt_dependency

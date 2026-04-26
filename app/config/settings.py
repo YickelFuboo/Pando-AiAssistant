@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 from pydantic import Field
@@ -12,31 +11,9 @@ _meta = get_project_meta()
 APP_NAME = _meta["name"]
 APP_VERSION = _meta["version"]
 APP_DESCRIPTION = _meta["description"]
-
-PROJECT_BASE_DIR = Path(__file__).resolve().parents[2]
-
-def is_frozen_runtime() -> bool:
-    return bool(getattr(sys, "frozen", False))
-
-def get_runtime_base_dir() -> Path:
-    if is_frozen_runtime():
-        return Path(sys.executable).resolve().parent
-    return PROJECT_BASE_DIR
-
-def get_runtime_config_dir() -> Path:
-    if is_frozen_runtime():
-        return get_runtime_base_dir() / "config"
-    return PROJECT_BASE_DIR / "app" / "config"
-
-def get_runtime_env_file() -> Path:
-    if is_frozen_runtime():
-        return get_runtime_config_dir() / "env"
-    return PROJECT_BASE_DIR / "env"
-
-def get_runtime_data_dir() -> Path:
-    if is_frozen_runtime():
-        return get_runtime_base_dir() / "data"
-    return PROJECT_BASE_DIR / "data"
+APP_BASE_DIR = Path(__file__).resolve().parents[1]
+MODELS_CONFIG_DIR = APP_BASE_DIR / "config" / "models"
+DEFAULT_RUNTIME_DATA_DIR = Path.home() / ".pando"
 
 
 class Settings(BaseSettings):
@@ -47,6 +24,9 @@ class Settings(BaseSettings):
     service_port: int = Field(default=8000, description="服务端口", env="SERVICE_PORT")
     debug: bool = Field(default=False, description="调试模式", env="DEBUG")
     app_log_level: str = Field(default="INFO", description="日志级别", env="APP_LOG_LEVEL")
+
+    # 运行时数据目录    
+    runtime_data_dir: str = Field(default=str(DEFAULT_RUNTIME_DATA_DIR), description="运行时数据目录", env="APP_RUNTIME_DATA_DIR")
 
     # 认证配置
     auth_user_service_url: str = Field(default="http://localhost:8000", description="User-Service地址", env="AUTH_USER_SERVICE_URL")
@@ -73,9 +53,6 @@ class Settings(BaseSettings):
     mysql_user: str = Field(default="root", description="MySQL用户名", env="MYSQL_USER")
     mysql_password: str = Field(default="your_password", description="MySQL密码", env="MYSQL_PASSWORD")
 
-    # SQLite 配置
-    sqlite_path: Optional[str] = Field(default=None, description="SQLite数据库文件路径(可选)，如 ./data/user.db 或 C:/data/user.db", env="SQLITE_PATH")
-    
     # 文件存储配置
     storage_type: str = Field(default="minio", description="存储类型: minio, s3, local", env="STORAGE_TYPE")
     
@@ -158,6 +135,9 @@ class Settings(BaseSettings):
     # =============================================================================
     # 模型配置说明 见：app/config/xxx.json
     # =============================================================================
+    model_cache_dir: str = Field(default="model_cache_dir", description="模型缓存目录(相对 APP_BASE_DIR)", env="MODEL_CACHE_DIR")
+    model_temp_dir: str = Field(default="model_temp_dir", description="模型临时目录(相对 runtime_data_dir)", env="MODEL_TEMP_DIR")
+
 
     # =============================================================================
     # 代码仓分析 - 行切片（codechunk/code_chunk）
@@ -198,7 +178,7 @@ class Settings(BaseSettings):
     compaction_prune_protected_tools: str = Field(default="skill", description="不参与修剪的工具名(逗号分隔)", env="COMPACTION_PRUNE_PROTECTED_TOOLS")
 
     class Config:
-        env_file = str(get_runtime_env_file())
+        env_file = "env"
         env_file_encoding = "utf-8"
         extra = "ignore"
     
@@ -210,10 +190,8 @@ class Settings(BaseSettings):
         elif self.database_type.lower() == "mysql":
             return f"mysql+aiomysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.db_name}"
         else:
-            raw_path = self.sqlite_path
-            if not raw_path:
-                filename = self.db_name if self.db_name.lower().endswith(".db") else f"{self.db_name}.db"
-                raw_path = str(get_runtime_data_dir() / "sqlite" / filename)
+            filename = self.db_name if self.db_name.lower().endswith(".db") else f"{self.db_name}.db"
+            raw_path = str(Path(self.runtime_data_dir) / "sqlite" / filename)
             abs_path = os.path.abspath(raw_path)
             parent_dir = os.path.dirname(abs_path)
             if parent_dir and not os.path.isdir(parent_dir):

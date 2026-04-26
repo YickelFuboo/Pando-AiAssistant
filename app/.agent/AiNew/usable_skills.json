@@ -1,0 +1,8 @@
+{
+  "skills": {
+    "AI4SE-News-Report": "allow",
+    "key-content-summary-analysis": "allow",
+    "jiaxian-report-generation": "allow"
+  },
+  "enable_extend": "yes"
+}

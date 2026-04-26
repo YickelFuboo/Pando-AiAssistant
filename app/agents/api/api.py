@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from app.agents.contants import AGENTS_ROOT_PATH, AGENT_META_FILENAME
+from app.agents.contants import AGENT_CONFIG_DIR, AGENT_META_FILE
 
 
 router = APIRouter(prefix="/agents")
@@ -24,7 +24,7 @@ class AgentTypesResponse(BaseModel):
 
 def _load_meta(agent_dir: Path) -> tuple[str, str]:
     """读取 .agent/{agent_type}/meta.json，返回 (name_zh, description_zh)，缺失则用目录名与空字符串。当前仅读中文。"""
-    meta_path = agent_dir / AGENT_META_FILENAME
+    meta_path = agent_dir / AGENT_META_FILE
     if not meta_path.is_file():
         return agent_dir.name, ""
     try:
@@ -47,8 +47,8 @@ def _load_meta(agent_dir: Path) -> tuple[str, str]:
 async def list_agent_types() -> AgentTypesResponse:
     """查询支持的 Agent 类型列表（含名称、描述）。"""
     items: List[AgentTypeItem] = []
-    if AGENTS_ROOT_PATH.exists() and AGENTS_ROOT_PATH.is_dir():
-        for p in sorted(AGENTS_ROOT_PATH.iterdir()):
+    if AGENT_CONFIG_DIR.exists() and AGENT_CONFIG_DIR.is_dir():
+        for p in sorted(AGENT_CONFIG_DIR.iterdir()):
             if not p.is_dir() or p.name.startswith("."):
                 continue
             name, description = _load_meta(p)

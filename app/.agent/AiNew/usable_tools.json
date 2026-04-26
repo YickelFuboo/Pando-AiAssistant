@@ -1,0 +1,22 @@
+{
+  "tools": {
+    "ask_question": "deny",
+    "terminate": "deny",
+    "file_read": "allow",
+    "file_write": "allow",
+    "file_replace_text": "deny",
+    "file_insert": "deny",
+    "file_replace_multi_text": "deny",
+    "glob_search": "deny",
+    "grep_search": "deny",
+    "dir_read": "allow",
+    "shell_exec": "deny",
+    "todo_read": "deny",
+    "todo_write": "deny",
+    "batch_tools": "deny",
+    "web_search": "allow",
+    "web_fetch": "allow",
+    "cron": "deny",
+    "spawn": "allow"
+  }
+}

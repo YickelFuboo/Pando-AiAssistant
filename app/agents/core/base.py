@@ -5,7 +5,7 @@ from abc import ABC
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from app.agents.contants import AGENTS_ROOT_PATH, WORKSPACE_ROOT_PATH, USER_ROOT_PATH, AGENT_META_FILENAME, USABLE_SKILLS_FILENAME
+from app.agents.contants import AGENT_CONFIG_DIR, AGENTS_RUNTIME_DATA_DIR, WORKSPACE_RUNTIME_DATA_DIR, USER_RUNTIME_DATA_DIR, AGENT_META_FILE, AGENT_USABLE_SKILLS_FILE
 from app.agents.sessions.manager import SESSION_MANAGER
 from app.agents.sessions.message import Role, Message, ToolCall, Function
 from app.infrastructure.llms.chat_models.schemes import ToolArgsParser
@@ -78,6 +78,7 @@ class BaseAgent(ABC):
         channel_id: str,
         session_id: str,
         user_id: str,
+        workspace_dir: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
@@ -121,22 +122,25 @@ class BaseAgent(ABC):
         self._max_duplicate_steps = max_duplicate_steps or 2   # 最大重复次数，用于检验当前项agent是否挂死
         self._stop_requested = False
 
-        # 相关路径
-        self.agent_path = str(AGENTS_ROOT_PATH / agent_type) # Agent的定义路径
-        self.user_path = str(USER_ROOT_PATH / user_id)  # Agent的用户数据空间路径
-        self.workspace_path = str(WORKSPACE_ROOT_PATH / user_id / agent_type)  # Agent的工作空间路径
-        self.project_path = None  # Agent工作的目标项目路径
+        # 配置文件路径        
+        self.agent_config_dir = str(AGENT_CONFIG_DIR / agent_type) # Agent的定义路径
+        # 工作项目路径
+        self.workspace_dir = workspace_dir  # Agent工作的目标项目路径
+        # 运行时空间路径
+        self.agent_runtime_dir = str(AGENTS_RUNTIME_DATA_DIR / agent_type)  # Agent的运行时数据空间路径
+        self.user_runtime_dir = str(USER_RUNTIME_DATA_DIR / user_id)  # Agent的用户数据空间路径
+        self.workspace_runtime_dir = str(WORKSPACE_RUNTIME_DATA_DIR / user_id / agent_type)  # Agent的工作空间路径
 
         # 技能相关
         self.skill_names: list[str] = []
         self.skills_extend_enabled = False
-        self._load_skills_config(self.agent_path)
+        self._load_skills_config()
         
-        self._load_meta(self.agent_path)
+        self._load_meta()
 
-    def _load_meta(self, agent_path: str) -> None:
+    def _load_meta(self) -> None:
         """Load .agent/{agent_type}/meta.json and set description (English)."""
-        meta_path = Path(agent_path) / AGENT_META_FILENAME
+        meta_path = Path(self.agent_config_dir) / AGENT_META_FILE
         if not meta_path.is_file():
             return
         try:
@@ -146,9 +150,9 @@ class BaseAgent(ABC):
         except Exception as e:
             logging.warning("Failed to load meta.json for agent %s: %s", self.agent_type, e)
 
-    def _load_skills_config(self, agent_path: str) -> None:
+    def _load_skills_config(self) -> None:
         """从 usable_skills.json 加载 enable_extend（yes/no）与 allow 名单（与 usable_tools 策略一致）。"""
-        skills_path = Path(agent_path) / USABLE_SKILLS_FILENAME
+        skills_path = Path(self.agent_config_dir) / AGENT_USABLE_SKILLS_FILE
         if not skills_path.is_file():
             return
         try:

@@ -4,11 +4,8 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Optional, Protocol
-from app.config.settings import get_runtime_data_dir
+from app.config.settings import settings
 from .types import CronJob, CronJobState, CronKind, CronPayload, CronSchedule
-
-
-DEFAULT_STORE_PATH = get_runtime_data_dir() / "cron.json"
 
 
 class CronStore(Protocol):
@@ -119,7 +116,7 @@ class CronFileStore:
     """单机 JSON 文件存储：读全量、部分更新、写回；内存缓存供 list/get 复用，写操作后刷新缓存。"""
 
     def __init__(self):
-        self._path = DEFAULT_STORE_PATH
+        self._path = Path(settings.runtime_data_dir) / "cron" / "cron.json"
         self._cache: Optional[List[CronJob]] = None
 
     def _load(self) -> List[CronJob]:

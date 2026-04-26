@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "pando-aiworker-service"
+name = "Pando-Harness"
 version = "0.1.0"
-description = "Pando AI Worker 服务"
+description = "Pando Harness 服务"
 authors = ["Your Name <your.email@example.com>"]
 packages = [{include = "app"}]
 
@@ -23,6 +23,7 @@ aiohttp = "3.12.15"
 GitPython = "3.1.45"
 jina = "3.34.0"
 grpcio = "1.68.0"
+celery = "5.3.6"
 colorama = "0.4.6"
 loguru = "0.7.2"
 websocket-client = "1.8.0"
@@ -50,10 +51,24 @@ sqlalchemy = "2.0.43"
 neo4j = ">=5.0.0,<6.0.0"
 alembic = "^1.18.0"
 
+# Redis缓存
+redis = ">=5.0.0,<6.0.0"
+
+# 向量存储
+elastic-transport = "==8.12.0"
+elasticsearch = "==8.12.1"
+elasticsearch-dsl = "==8.12.0"
+opensearch-py = "==2.7.1"
+
 # 文件存储（minio / qianfan 依赖 pycryptodome 提供 Crypto 模块）
 pycryptodome = "^3.23.0"
+azure-storage-blob = "==12.22.0"
+azure-identity = "==1.17.1"
+azure-storage-file-datalake = "==12.16.0"
 boto3 = "==1.34.140"
 botocore = "==1.34.140"
+minio = "==7.2.4"
+opendal = ">=0.45.0,<0.46.0"
 
 # 模型相关
 anthropic = "==0.34.1"

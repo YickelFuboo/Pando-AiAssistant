@@ -1,8 +1,8 @@
 import logging
+import asyncio
 from typing import List, Tuple
 import numpy as np
-import asyncio
-from zhipuai import ZhipuAI
+from zai import ZhipuAiClient
 from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
 from ..utils import truncate
 
@@ -21,7 +21,7 @@ class ZhipuEmbed(BaseEmbedding):
             **kwargs: 其他参数
         """
         super().__init__(api_key, model_provider, model_name, **kwargs)
-        self.client = ZhipuAI(api_key=api_key)
+        self.client = ZhipuAiClient(api_key=api_key)
 
     async def encode(self, texts: List[str]) -> Tuple[np.ndarray, int]:
         """
@@ -54,7 +54,7 @@ class ZhipuEmbed(BaseEmbedding):
                         model=self.model_name
                     )
                     arr.append(res.data[0].embedding)
-                    token_count += self.total_token_count(res)
+                    token_count += self._total_token_count(res)
                     break  # 成功则跳出重试循环
                     
                 except Exception as e:

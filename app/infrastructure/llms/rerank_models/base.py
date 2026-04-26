@@ -108,16 +108,8 @@ class BaseRank(ABC):
         """
         settings = Settings()
         
-        # 通过查找包含main.py的目录来确定项目根目录
-        current_dir = os.path.dirname(__file__)
-        project_root = current_dir
-        while project_root != os.path.dirname(project_root):  # 直到到达文件系统根目录
-            if os.path.exists(os.path.join(project_root, "main.py")):
-                break
-            project_root = os.path.dirname(project_root)
-        
         # 创建缓存目录
-        cache_dir = os.path.join(project_root, settings.model_cache_dir, "rerank")
+        cache_dir = os.path.join(settings.runtime_data_dir, settings.model_cache_dir, "rerank")
         os.makedirs(cache_dir, exist_ok=True)
         
         # 清理模型名称，移除用户名前缀

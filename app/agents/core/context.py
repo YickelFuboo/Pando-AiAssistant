@@ -10,7 +10,7 @@ from typing import Any, Optional
 from app.infrastructure.llms.prompts.prompt_template_load import get_prompt_template
 from ..skills.manager import SkillsManager
 from ..memorys.manager import MemoryManager
-from ..contants import AGENT_CONTEXT_PATH, AGENT_CONTEXT_FILES
+from ..contants import AGENT_CONTEXT_DIR, AGENT_CONTEXT_FILES
 
 
 class ContextBuilder:
@@ -19,23 +19,28 @@ class ContextBuilder:
         self,
         session_id: str,
         agent_type: str,
-        agent_path: str,
-        workspace_path: str,
+        agent_config_dir: str,
+        agent_runtime_dir: str,
+        user_runtime_dir: str,
+        workspace_runtime_dir: str,
         agent_description: str = "",
         skill_names: list[str] | None = None,
         params: Optional[dict[str, Any]] = None,
     ):
         self.session_id = session_id
-        self.agent_path = agent_path
-        self.workspace_path = workspace_path
+        self.agent_config_dir = agent_config_dir
+        self.agent_runtime_dir = agent_runtime_dir
+        self.user_runtime_dir = user_runtime_dir
+        self.workspace_runtime_dir = workspace_runtime_dir
         self.params = dict(params) if params else {}
         self._skill_names = skill_names
-        self.skills_manager = SkillsManager(agent_path, workspace_path)
+        self.skills_manager = SkillsManager(agent_config_dir, workspace_runtime_dir)
         self.memory_manager = MemoryManager(
             session_id=session_id, 
             agent_type=agent_type,
-            agent_path=agent_path,
-            workspace_path=workspace_path,
+            agent_runtime_dir=agent_runtime_dir,
+            user_runtime_dir=user_runtime_dir,
+            workspace_runtime_dir=workspace_runtime_dir,
             agent_description=agent_description
         )
     
@@ -71,11 +76,11 @@ class ContextBuilder:
 
         self.params.update({
             "runtime": runtime,
-            "workspace_path": str(Path(self.workspace_path).expanduser().resolve()),
+            "workspace_path": str(Path(self.workspace_runtime_dir).expanduser().resolve()),
         })  
 
         # 1. 构造Agent类型对应的引导文件（从 .agent/agent_type/prompt 目录读）
-        agent_prompt_dir = Path(self.agent_path) / AGENT_CONTEXT_PATH
+        agent_prompt_dir = Path(self.agent_config_dir) / AGENT_CONTEXT_DIR
         for filename in AGENT_CONTEXT_FILES:
             file = agent_prompt_dir / filename
             if file.exists():

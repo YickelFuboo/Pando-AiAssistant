@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 from app.services.code_analysis.services.lsp.lsp_service import CodeLSPService
-from app.config.settings import get_runtime_data_dir
+from app.config.settings import settings
 
 
 # 文件写操作相关
@@ -114,6 +114,6 @@ async def _touch_lsp_after_write(file_path:Path,kwargs:Dict[str,Any])->Dict[str,
 
 # todo相关
 def todo_file(session_id : str)->Path:
-    root = get_runtime_data_dir()/"todos"/session_id
+    root = Path(settings.runtime_data_dir) / "todos" / session_id
     root.mkdir(parents=True, exist_ok=True)
     return root/"todo.json"

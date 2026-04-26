@@ -5,15 +5,6 @@ from pathlib import Path
 import tomllib
 
 
-def local_now_iso() -> str:
-    return datetime.now().isoformat()
-
-
-def normalize_path(path: str) -> str:
-    """规范化路径，统一使用正斜杠"""
-    return path.replace("\\", "/")
-
-
 def get_project_meta(package_name: str = "knowledge-service"):
     """从 pyproject.toml 读取项目元数据"""
     toml_path = Path(__file__).parent.parent.parent / "pyproject.toml"
@@ -47,6 +38,12 @@ def is_english(text: str) -> bool:
             return False
     return True
 
+def local_now_iso() -> str:
+    return datetime.now().isoformat()
+
+def normalize_path(path: str) -> str:
+    """规范化路径，统一使用正斜杠"""
+    return path.replace("\\", "/")
 
 def increase_md_heading_levels(content: str, levels: int = 1) -> str:
     """将 markdown 标题层级整体增加 levels 级（# -> ##，## -> ###，最多 6 级）。"""
