@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ..base import BaseTool
 from ..schemes import ToolResult, ToolSuccessResult, ToolErrorResult
-from .utils import _trim_diff, _two_files_patch, not_found_message
+from ..utils import _trim_diff,_two_files_patch,not_found_message
 
 
 class ReplaceFileTextTool(BaseTool):

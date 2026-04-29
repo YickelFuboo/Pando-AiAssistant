@@ -93,9 +93,8 @@ class MemoryManager:
         self,
         session_id: str,
         agent_type: str,
-        agent_runtime_dir: str,
-        user_runtime_dir: str,
-        workspace_runtime_dir: str,
+        user_id: str,
+        workspace_path: str,
         agent_description: str = "",
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
@@ -105,10 +104,10 @@ class MemoryManager:
         self._agent_description = agent_description or ""
         self._llm_provider = llm_provider or ""
         self._llm_model = llm_model or ""
-        self._agent_memory = Path(agent_runtime_dir) / MEMORY_DIR / "MEMORY.md"
-        self._user_memory = Path(user_runtime_dir) / MEMORY_DIR / "MEMORY.md"
-        self._workspace_memory = Path(workspace_runtime_dir) / MEMORY_DIR / "MEMORY.md"
-        self._workspace_history = Path(workspace_runtime_dir) / MEMORY_DIR / "HISTORY.md"
+        self._agent_memory = Path(workspace_path) / MEMORY_DIR /self._agent_type / "MEMORY.md"
+        self._user_memory = Path(workspace_path) / MEMORY_DIR / user_id / "MEMORY.md"
+        self._workspace_memory = Path(workspace_path) / MEMORY_DIR / "MEMORY.md"
+        self._workspace_history = Path(workspace_path) / MEMORY_DIR / "HISTORY.md"
 
     async def _read_file(self, file: Path) -> str:
         if not file.exists():

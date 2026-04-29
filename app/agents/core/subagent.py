@@ -7,11 +7,37 @@ from app.agents.bus.queues import MESSAGE_GATEWAY
 from app.agents.bus.types import InboundMessage
 from app.agents.core.base import AgentState, ToolChoice, extract_stream_tool_calls
 from app.agents.sessions.compaction import SessionCompaction
-from app.agents.tools.factory import ToolsFactory,register_tools_by_config
+from app.agents.tools.factory import ToolsFactory
 from app.agents.sessions.message import Message, Role, ToolCall
 from app.agents.sessions.session import Session
 from app.infrastructure.llms.chat_models.factory import llm_factory
 from app.infrastructure.llms.chat_models.schemes import TokenUsage
+from app.agents.tools import (
+    AskQuestion,
+    BatchTool,
+    ApplyPatchTool,
+    CodeDependenciesSearchTool,
+    CodeRelatedFilesSearchTool,
+    CodeSimilarSearchTool,
+    CodeShellTool,
+    ListCodeFilesTool,
+    LspTool,
+    CronTool,
+    ReadDirTool,
+    ReadFileTool,
+    GlobTool,
+    GrepTool,
+    InsertFileTool,
+    MultiReplaceTextTool,
+    ReplaceFileTextTool,
+    WriteFileTool,
+    ExecTool,
+    TodoReadTool,
+    TodoWriteTool,
+    WebFetchTool,
+    WebSearchTool,
+    SpawnTool,
+)
 
 
 SUBAGENT_TOOLS_CONFIG={
@@ -46,10 +72,34 @@ SUBAGENT_USABLE_TOOL_NAMES=[
 class SubAgentManager(ABC):
     """SubAgent 管理器"""
     
-    def __init__(self, parent_agent_type: str):
+    def __init__(
+        self,
+        user_id: str,
+        parent_agent_type: str,
+        session_id: str,
+        channel_type: str,
+        channel_id: str,
+        workspace_path: str,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        **kwargs: Any,
+    ):
 
         # 基本信息
+        self.user_id = user_id
         self.parent_agent_type = parent_agent_type
+        self.session_id = session_id
+        self.channel_type = channel_type
+        self.channel_id = channel_id
+        self.workspace_path = workspace_path
+
+        # 模型信息
+        self.llm_provider = llm_provider or ""
+        self.llm_model = llm_model or ""
+        self.temperature = temperature or 0.7
+
+        self.params = kwargs
 
         # 运行任务信息
         self._running_tasks: Dict[str, asyncio.Task] = {}
@@ -219,18 +269,59 @@ class SubAgent(ABC):
             raise e
 
     def _register_tools(self) -> None:
-        """SubAgent 工具根据内置配置注册，不注册 SpawnTool。"""
-        register_tools_by_config(
-            usable_tool_names=SUBAGENT_USABLE_TOOL_NAMES,
-            tools_factory=self.available_tools,
-            agent_type="SubAgent",
-            session_id=self.session_id,
-            user_id=self.user_id,
-            channel_id=self.channel_id,
-            channel_type=self.channel_type,
-            subagent_manager=None,
-            params=self.params,
-        )
+        # 注册工具
+        usable_tool_names = SUBAGENT_USABLE_TOOL_NAMES
+
+        if "ask_question" in usable_tool_names:
+            self.available_tools.register_tool(AskQuestion())
+        if "file_read" in usable_tool_names:
+            self.available_tools.register_tool(ReadFileTool())
+        if "file_write" in usable_tool_names:
+            self.available_tools.register_tool(WriteFileTool())
+        if "file_insert" in usable_tool_names:
+            self.available_tools.register_tool(InsertFileTool())
+        if "file_replace_text" in usable_tool_names:
+            self.available_tools.register_tool(ReplaceFileTextTool())
+        if "file_replace_multi_text" in usable_tool_names:
+            self.available_tools.register_tool(MultiReplaceTextTool())
+        if "glob_search" in usable_tool_names:
+            self.available_tools.register_tool(GlobTool())
+        if "grep_search" in usable_tool_names:
+            self.available_tools.register_tool(GrepTool())
+        if "dir_read" in usable_tool_names:
+            self.available_tools.register_tool(ReadDirTool())
+        if "shell_exec" in usable_tool_names:
+            self.available_tools.register_tool(ExecTool())
+        if "todo_read" in usable_tool_names:
+            self.available_tools.register_tool(TodoReadTool(session_id=self.session_id))
+        if "todo_write" in usable_tool_names:
+            self.available_tools.register_tool(TodoWriteTool(session_id=self.session_id))
+        if "batch_tools" in usable_tool_names:
+            self.available_tools.register_tool(BatchTool(tools_factory=self.available_tools))
+        if "web_search" in usable_tool_names:
+            self.available_tools.register_tool(WebSearchTool())
+        if "web_fetch" in usable_tool_names:
+            self.available_tools.register_tool(WebFetchTool())
+        if "cron" in usable_tool_names:
+            self.available_tools.register_tool(CronTool(session_id=self.session_id,user_id=self.user_id,agent_type=self.agent_type,channel_id=self.channel_id,channel_type=self.channel_type))
+        if "spawn" in usable_tool_names and self.subagent_manager is not None:
+            self.available_tools.register_tool(SpawnTool(subagent_manager=self.subagent_manager))
+        
+        # 代码分析工具
+        if "list_code_files" in usable_tool_names:
+            self.available_tools.register_tool(ListCodeFilesTool())
+        if "apply_patch" in usable_tool_names:
+            self.available_tools.register_tool(ApplyPatchTool(repo_id=self.params.get("repo_id") or ""))
+        if "code_similar_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeSimilarSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "code_related_files_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeRelatedFilesSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "code_dependencies_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeDependenciesSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "lsp" in usable_tool_names:
+            self.available_tools.register_tool(LspTool(repo_id=self.params.get("repo_id") or ""))
+        if "code_shell" in usable_tool_names:
+            self.available_tools.register_tool(CodeShellTool())
 
     def _build_subagent_prompt(self) -> str:
         """子 Agent 专用 system prompt：身份、当前时间、能做/不能做、workspace 路径（具体任务由 question 传入）。"""

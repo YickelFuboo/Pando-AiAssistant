@@ -65,8 +65,13 @@ class ToolChoice(str, Enum):
     AUTO = "auto"
     REQUIRED = "required"
 
-class AgentRunContext(ABC):
-    """Agent运行动态上下文"""
+class BaseAgent(ABC):
+    """Base Agent class
+
+    Base class for all agents, defining basic properties and methods.
+    执行类，不参与 schema 序列化，仅用 __init__ 内 self 赋值。
+    """
+
     def __init__(
         self,
         agent_type: str,
@@ -74,11 +79,23 @@ class AgentRunContext(ABC):
         channel_id: str,
         session_id: str,
         user_id: str,
-        project_path: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+        next_step_prompt: Optional[str] = None,
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        memory_window: Optional[int] = None,
+        max_steps: Optional[int] = None,
+        max_duplicate_steps: Optional[int] = None,
         **kwargs: Any,
     ):
+        # 基本信息
+        self.agent_type = agent_type
+        self.agent_path = AGENT_CONFIG_DIR / self.agent_type # Agent的定义路径
+        self.description: str = ""
+        self._load_meta()
+
         # 客户端信息
         self.channel_type = channel_type
         self.channel_id = channel_id
@@ -87,48 +104,27 @@ class AgentRunContext(ABC):
         self.session_id = session_id
         self.user_id = user_id
 
+        # 运行时目录
+        self.workspace_path = Path(settings.runtime_data_dir) / ".workspace" / self.user_id
+
+        # 提示词信息
+        self.system_prompt = system_prompt or "You are pando, a helpful assistant."
+        self.user_prompt = user_prompt or ""
+        self.next_step_prompt = next_step_prompt or "Please continue your work."
+
         # 模型信息
         self.llm_provider = llm_provider or ""
         self.llm_model = llm_model or ""
+        self.temperature = temperature or 0.7
+        self.memory_window = memory_window or 100
 
         self.params = dict(kwargs)
-
-        # Agent运行空间
-        self.workspace_path = self._get_workspace_path() # Agent工作的目标项目路径
-        self.project_path = project_path or None  # Agent运行的项目路径
-
-    def _get_workspace_path(self) -> Path:
-        return Path(settings.runtime_data_dir) / ".workspace" / self.user_id
-
-
-class BaseAgent(ABC):
-    """Base Agent class
-
-    Base class for all agents, defining basic properties and methods.
-    执行类，不参与 schema 序列化，仅用 __init__ 内 self 赋值。
-    """
-
-    def __init__(self, agent_type: str):
-        # 基本信息
-        self.agent_type = agent_type
-        self.agent_path = AGENT_CONFIG_DIR / self.agent_type # Agent的定义路径
-        self.description: str = ""
-        self._load_meta()
-
-        # 提示词信息
-        self.system_prompt = "You are pando, a helpful assistant."
-        self.user_prompt = ""
-        self.next_step_prompt = "Please continue your work."
-
-        # 模型信息
-        self.temperature = 0.7
-        self.memory_window = 100
 
         # 执行步数相关
         self._state = AgentState.IDLE
         self._current_step = 0
-        self._max_steps = 50
-        self._max_duplicate_steps = 2   # 最大重复次数，用于检验当前项agent是否挂死
+        self._max_steps = max_steps or 50
+        self._max_duplicate_steps = max_duplicate_steps or 2   # 最大重复次数，用于检验当前项agent是否挂死
         self._stop_requested = False
 
         # 技能相关

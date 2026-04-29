@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     app_log_level: str = Field(default="INFO", description="日志级别", env="APP_LOG_LEVEL")
 
     # 运行时数据目录    
-    runtime_data_dir: str = Field(default=str(DEFAULT_RUNTIME_DATA_DIR), description="运行时数据目录", env="APP_RUNTIME_DATA_DIR")
+    runtime_data_dir: str = Field(default=str(DEFAULT_RUNTIME_DATA_DIR), description="运行时数据目录", env="RUNTIME_DATA_DIR")
 
     # 认证配置
     auth_user_service_url: str = Field(default="http://localhost:8000", description="User-Service地址", env="AUTH_USER_SERVICE_URL")
@@ -156,15 +156,12 @@ class Settings(BaseSettings):
     brave_api_key: str = Field(default="", description="Brave搜索API密钥", env="BRAVE_API_KEY")
 
     # =============================================================================
-    # Cron 配置 - 定时任务调度
-    # =============================================================================
-    run_cron: bool = Field(default=True, description="当前进程是否运行 cron 调度循环；多进程部署时仅在一个进程设为 True，避免重复执行", env="RUN_CRON")
-
-    # =============================================================================
     # Agent配置 - Agent 会话存储
     # =============================================================================
-    agent_session_use_local_storage: bool = Field(default=False, description="为 True 时会话存本地文件，为 False 时存数据库", env="AGENT_SESSION_USE_LOCAL_STORAGE")
-   
+    enable_local_session_storage: bool = Field(default=False, description="为 True 时会话存本地文件，为 False 时存数据库", env="ENABLE_LOCAL_SESSION_STORAGE")
+    enable_cron: bool = Field(default=True, description="当前进程是否运行 cron 调度循环；多进程部署时仅在一个进程设为 True，避免重复执行", env="ENABLE_CRON")
+    enable_message_interrupt: bool = Field(default=False, description="同一会话新消息是否中断当前Agent，true=中断并优先处理新消息，false=排队等待", env="ENABLE_MESSAGE_INTERRUPT")
+
     # =============================================================================
     # 会话压缩 - Session Compaction
     # =============================================================================

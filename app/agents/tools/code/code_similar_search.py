@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List
-from ...base import BaseTool
-from ...schemes import ToolErrorResult, ToolResult, ToolSuccessResult
+from ..base import BaseTool
+from ..schemes import ToolErrorResult, ToolResult, ToolSuccessResult
 from app.services.code_analysis.services.code_search_service import CodeSearchService
 
 

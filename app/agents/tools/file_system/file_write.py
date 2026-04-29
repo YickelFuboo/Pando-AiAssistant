@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict
 from ..base import BaseTool
 from ..schemes import ToolResult, ToolSuccessResult, ToolErrorResult
-from .utils import _trim_diff, _two_files_patch
+from ..utils import _trim_diff,_two_files_patch
 
 
 class WriteFileTool(BaseTool):

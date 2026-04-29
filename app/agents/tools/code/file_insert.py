@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from ..base import BaseTool
 from ..schemes import ToolResult, ToolSuccessResult, ToolErrorResult
-from .utils import _trim_diff, _two_files_patch, _is_code_agent_enabled, _touch_lsp_after_write, _append_lsp_diagnostics
+from ..utils import _trim_diff,_two_files_patch,_is_code_agent_enabled,_touch_lsp_after_write,_append_lsp_diagnostics
 
 
 class InsertFileTool(BaseTool):

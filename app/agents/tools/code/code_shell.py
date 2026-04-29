@@ -1,5 +1,5 @@
 import sys
-from app.agents.tools.local.shell_exec import ExecTool
+from app.agents.tools.exec.shell_exec import ExecTool
 
 
 class CodeShellTool(ExecTool):

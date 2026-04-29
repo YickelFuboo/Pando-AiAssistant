@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from ...schemes import ToolErrorResult, ToolResult
+from ..schemes import ToolErrorResult, ToolResult
 from .code_similar_search import _BaseRepoCodeSearchTool
 from app.services.code_analysis.services.codegraph.graph_search import CodeGraphSearch
 

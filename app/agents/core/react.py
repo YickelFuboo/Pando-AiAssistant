@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from app.agents.core.base import AgentState, BaseAgent, ToolChoice, extract_stream_tool_calls
-from app.agents.tools.factory import ToolsFactory,register_tools_by_config
+from app.agents.tools.factory import ToolsFactory
 from app.agents.sessions.message import Message, ToolCall, Function
 from app.agents.sessions.manager import SESSION_MANAGER
 from app.agents.sessions.compaction import SessionCompaction
@@ -16,6 +16,32 @@ from app.agents.memorys.manager import MemoryManager
 from app.agents.core.subagent import SubAgentManager
 from app.agents.contants import AGENT_MCP_SERVERS_FILE, AGENT_USABLE_TOOLS_FILE
 from app.config.settings import settings
+from app.agents.tools import (
+    AskQuestion,
+    BatchTool,
+    ApplyPatchTool,
+    CodeDependenciesSearchTool,
+    CodeRelatedFilesSearchTool,
+    CodeSimilarSearchTool,
+    CodeShellTool,
+    ListCodeFilesTool,
+    LspTool,
+    CronTool,
+    ReadDirTool,
+    ReadFileTool,
+    GlobTool,
+    GrepTool,
+    InsertFileTool,
+    MultiReplaceTextTool,
+    ReplaceFileTextTool,
+    WriteFileTool,
+    ExecTool,
+    TodoReadTool,
+    TodoWriteTool,
+    WebFetchTool,
+    WebSearchTool,
+    SpawnTool,
+)
 
 
 class ReActAgent(BaseAgent):
@@ -28,7 +54,6 @@ class ReActAgent(BaseAgent):
         channel_id: str,
         session_id: str,
         user_id: str,
-        workspace_dir: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
@@ -46,7 +71,6 @@ class ReActAgent(BaseAgent):
             channel_id=channel_id,
             session_id=session_id,
             user_id=user_id,
-            workspace_dir=workspace_dir,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             next_step_prompt=next_step_prompt,
@@ -79,10 +103,9 @@ class ReActAgent(BaseAgent):
         self._register_tools()
         self._mcp_registered = False
 
-
     def _register_tools(self) -> None:
         """根据 .agent/{agent_type}/usable_tools.json 注册工具，仅注册配置中列出的项。"""
-        config_path = Path(self.agent_config_dir) / AGENT_USABLE_TOOLS_FILE
+        config_path = Path(self.agent_path) / AGENT_USABLE_TOOLS_FILE
         if not config_path.is_file():
             return
         try:
@@ -98,24 +121,65 @@ class ReActAgent(BaseAgent):
                 for name, decision in tools_policy.items()
                 if str(decision).strip().lower() == "allow"
             ]
-        register_tools_by_config(
-            usable_tool_names=usable_tool_names,
-            tools_factory=self.available_tools,
-            agent_type=self.agent_type,
-            session_id=self.session_id,
-            user_id=self.user_id,
-            channel_id=self.channel_id,
-            channel_type=self.channel_type,
-            subagent_manager=self.subagent_manager,
-            params=self.params,
-        )
+
+        # 注册工具
+        if "ask_question" in usable_tool_names:
+            self.available_tools.register_tool(AskQuestion())
+        if "file_read" in usable_tool_names:
+            self.available_tools.register_tool(ReadFileTool())
+        if "file_write" in usable_tool_names:
+            self.available_tools.register_tool(WriteFileTool())
+        if "file_insert" in usable_tool_names:
+            self.available_tools.register_tool(InsertFileTool())
+        if "file_replace_text" in usable_tool_names:
+            self.available_tools.register_tool(ReplaceFileTextTool())
+        if "file_replace_multi_text" in usable_tool_names:
+            self.available_tools.register_tool(MultiReplaceTextTool())
+        if "glob_search" in usable_tool_names:
+            self.available_tools.register_tool(GlobTool())
+        if "grep_search" in usable_tool_names:
+            self.available_tools.register_tool(GrepTool())
+        if "dir_read" in usable_tool_names:
+            self.available_tools.register_tool(ReadDirTool())
+        if "shell_exec" in usable_tool_names:
+            self.available_tools.register_tool(ExecTool())
+        if "todo_read" in usable_tool_names:
+            self.available_tools.register_tool(TodoReadTool(session_id=self.session_id))
+        if "todo_write" in usable_tool_names:
+            self.available_tools.register_tool(TodoWriteTool(session_id=self.session_id))
+        if "batch_tools" in usable_tool_names:
+            self.available_tools.register_tool(BatchTool(tools_factory=self.available_tools))
+        if "web_search" in usable_tool_names:
+            self.available_tools.register_tool(WebSearchTool())
+        if "web_fetch" in usable_tool_names:
+            self.available_tools.register_tool(WebFetchTool())
+        if "cron" in usable_tool_names:
+            self.available_tools.register_tool(CronTool(session_id=self.session_id,user_id=self.user_id,agent_type=self.agent_type,channel_id=self.channel_id,channel_type=self.channel_type))
+        if "spawn" in usable_tool_names and self.subagent_manager is not None:
+            self.available_tools.register_tool(SpawnTool(subagent_manager=self.subagent_manager))
+        
+        # 代码分析工具
+        if "list_code_files" in usable_tool_names:
+            self.available_tools.register_tool(ListCodeFilesTool())
+        if "apply_patch" in usable_tool_names:
+            self.available_tools.register_tool(ApplyPatchTool(repo_id=self.params.get("repo_id") or ""))
+        if "code_similar_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeSimilarSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "code_related_files_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeRelatedFilesSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "code_dependencies_search" in usable_tool_names:
+            self.available_tools.register_tool(CodeDependenciesSearchTool(repo_id=str(self.params.get("repo_id") or "")))
+        if "lsp" in usable_tool_names:
+            self.available_tools.register_tool(LspTool(repo_id=self.params.get("repo_id") or ""))
+        if "code_shell" in usable_tool_names:
+            self.available_tools.register_tool(CodeShellTool())
 
     async def _register_mcp_tools(self) -> None:
         """从 .agent/{agent_type}/mcp_servers.json 加载配置，经连接池获取/复用 MCP，并将工具注册到 available_tools。"""
         if self._mcp_registered:
             return
         
-        config_path = Path(self.agent_config_dir) / AGENT_MCP_SERVERS_FILE
+        config_path = Path(self.agent_path) / AGENT_MCP_SERVERS_FILE
         if not config_path.is_file():
             return
         try:
@@ -159,7 +223,8 @@ class ReActAgent(BaseAgent):
         context_builder = ContextBuilder(
             session_id=self.session_id,
             agent_type=self.agent_type,
-            agent_config_dir=self.agent_config_dir,
+            user_id=self.user_id,
+            agent_path=self.agent_path,
             workspace_path=self.workspace_path,
             agent_description=self.description,
             skill_names=self.skill_names,
@@ -168,12 +233,9 @@ class ReActAgent(BaseAgent):
         memory_manager = MemoryManager(
             session_id=self.session_id,
             agent_type=self.agent_type,
-            agent_runtime_dir=self.agent_runtime_dir,
-            user_runtime_dir=self.user_runtime_dir,
-            workspace_runtime_dir=self.workspace_runtime_dir,
+            user_id=self.user_id,
+            workspace_path=self.workspace_path,
             agent_description=self.description,
-            llm_provider=self.llm_provider,
-            llm_model=self.llm_model,
         )
         try:
             # 连接并注册 MCP 工具
@@ -329,9 +391,11 @@ class ReActAgent(BaseAgent):
             q = ""
             items = args.get("questions") or []
             if items and isinstance(items, list):
-                text = (q or "").strip()
-                formatted.append(f"{text}")
-            q = "\n".join(formatted)  
+                for item in items:
+                    text = (item or "").strip()
+                    if text:
+                        formatted.append(text)
+            q = "\n".join(formatted)
             await self.push_history_message_and_notify_user(Message.assistant_message(q or ""))
         #elif name == "terminate":
         #    await self.push_history_message_and_notify_user(Message.assistant_message(args.get("summary") or ""))

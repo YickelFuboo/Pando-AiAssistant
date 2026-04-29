@@ -16,7 +16,7 @@ class SessionManager:
 
     def __init__(self) -> None:
         self._store: SessionStore = (
-            LocalFileSessionStore() if settings.agent_session_use_local_storage
+            LocalFileSessionStore() if settings.enable_local_session_storage
             else DatabaseSessionStore()
         )
 
