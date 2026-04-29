@@ -4,6 +4,7 @@ from typing import Any,Dict,List
 from .base import BaseTool
 from .schemes import ToolResult,ToolSuccessResult,ToolErrorResult,ToolResultStatus
 from .truncation import Truncate
+from app.config import settings
 
 
 TOOLS_CACHE_NAME = ()
@@ -129,7 +130,7 @@ class ToolsFactory:
             result = await tool.execute(**tool_params)
 
             # 仅对成功结果做超长截断，统一在 Factory 处理；工具无需自行截断
-            if result.status == ToolResultStatus.EXECUTE_SUCCESS and self._workspace_path:
+            if settings.enable_tool_result_truncate and result.status == ToolResultStatus.EXECUTE_SUCCESS and self._workspace_path:
                 raw = f"{result.result}"
                 truncated = Truncate.output(
                     raw,
