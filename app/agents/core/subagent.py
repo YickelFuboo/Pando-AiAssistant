@@ -75,10 +75,10 @@ class SubAgentManager(ABC):
     def __init__(
         self,
         user_id: str,
-        parent_agent_type: str,
         session_id: str,
         channel_type: str,
         channel_id: str,
+        parent_agent_type: str,
         workspace_path: str,
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,

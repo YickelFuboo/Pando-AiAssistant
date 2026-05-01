@@ -307,11 +307,11 @@ class MessageBus:
         )
         if agent is None:
             agent = ReActAgent(
-                agent_type=agent_type,
+                user_id=inbound_msg.user_id,
+                session_id=session_id,
                 channel_type=inbound_msg.channel_type,
                 channel_id=inbound_msg.channel_id,
-                session_id=session_id,
-                user_id=inbound_msg.user_id,
+                agent_type=agent_type,
                 llm_provider=inbound_msg.llm_provider,
                 llm_model=inbound_msg.llm_model,
                 **metadata,

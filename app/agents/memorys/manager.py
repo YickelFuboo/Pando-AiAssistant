@@ -91,11 +91,11 @@ class MemoryManager:
 
     def __init__(
         self,
+        user_id: str,
         session_id: str,
         agent_type: str,
-        user_id: str,
+        agent_description: str,
         workspace_path: str,
-        agent_description: str = "",
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
     ) -> None:

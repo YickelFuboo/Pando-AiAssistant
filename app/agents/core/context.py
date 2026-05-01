@@ -17,12 +17,12 @@ class ContextBuilder:
 
     def __init__(
         self,
+        user_id: str,
         session_id: str,
         agent_type: str,
-        user_id: str,
+        agent_description: str,
         agent_path: str,
         workspace_path: str,
-        agent_description: str = "",
         skill_names: list[str] | None = None,
         params: Optional[dict[str, Any]] = None,
     ):
@@ -33,11 +33,11 @@ class ContextBuilder:
         self._skill_names = skill_names
         self.skills_manager = SkillsManager(agent_path, workspace_path)
         self.memory_manager = MemoryManager(
+            user_id=user_id,
             session_id=session_id, 
             agent_type=agent_type,
-            user_id=user_id,
+            agent_description=agent_description,
             workspace_path=workspace_path,
-            agent_description=agent_description
         )
     
     @staticmethod

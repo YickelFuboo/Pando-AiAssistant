@@ -49,11 +49,12 @@ class ReActAgent(BaseAgent):
 
     def __init__(
         self,
-        agent_type: str,
+        user_id: str,
+        session_id: str,
         channel_type: str,
         channel_id: str,
-        session_id: str,
-        user_id: str,
+        agent_type: str,
+        project_path: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
@@ -66,11 +67,12 @@ class ReActAgent(BaseAgent):
         **kwargs: Any,
     ):
         super().__init__(
-            agent_type=agent_type,
+            user_id=user_id,
+            session_id=session_id,
             channel_type=channel_type,
             channel_id=channel_id,
-            session_id=session_id,
-            user_id=user_id,
+            agent_type=agent_type,
+            project_path=project_path,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             next_step_prompt=next_step_prompt,
@@ -86,10 +88,10 @@ class ReActAgent(BaseAgent):
         # 子Agent管理器
         self.subagent_manager = SubAgentManager(
             user_id=user_id,
-            parent_agent_type=agent_type,
             session_id=session_id,
             channel_type=channel_type,
             channel_id=channel_id,
+            parent_agent_type=agent_type,
             workspace_path=self.workspace_path,
             llm_provider=self.llm_provider,
             llm_model=self.llm_model,
@@ -221,21 +223,21 @@ class ReActAgent(BaseAgent):
         llm = llm_factory.create_model(provider=self.llm_provider, model=self.llm_model)
 
         context_builder = ContextBuilder(
+            user_id=self.user_id,
             session_id=self.session_id,
             agent_type=self.agent_type,
-            user_id=self.user_id,
+            agent_description=self.description,
             agent_path=self.agent_path,
             workspace_path=self.workspace_path,
-            agent_description=self.description,
             skill_names=self.skill_names,
             params=self.params,
         )
         memory_manager = MemoryManager(
+            user_id=self.user_id,
             session_id=self.session_id,
             agent_type=self.agent_type,
-            user_id=self.user_id,
-            workspace_path=self.workspace_path,
             agent_description=self.description,
+            workspace_path=self.workspace_path,
         )
         try:
             # 连接并注册 MCP 工具

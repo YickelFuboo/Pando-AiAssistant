@@ -74,11 +74,12 @@ class BaseAgent(ABC):
 
     def __init__(
         self,
-        agent_type: str,
+        user_id: str,
+        session_id: str,
         channel_type: str,
         channel_id: str,
-        session_id: str,
-        user_id: str,
+        agent_type: str,
+        project_path: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
@@ -90,22 +91,23 @@ class BaseAgent(ABC):
         max_duplicate_steps: Optional[int] = None,
         **kwargs: Any,
     ):
+        # 会话与用户
+        self.session_id = session_id
+        self.user_id = user_id
+
+        # 客户端信息
+        self.channel_type = channel_type
+        self.channel_id = channel_id
+
         # 基本信息
         self.agent_type = agent_type
         self.agent_path = AGENT_CONFIG_DIR / self.agent_type # Agent的定义路径
         self.description: str = ""
         self._load_meta()
 
-        # 客户端信息
-        self.channel_type = channel_type
-        self.channel_id = channel_id
-
-        # 会话与用户
-        self.session_id = session_id
-        self.user_id = user_id
-
         # 运行时目录
         self.workspace_path = Path(settings.runtime_data_dir) / ".workspace" / self.user_id
+        self.project_path = Path(project_path) if project_path else None
 
         # 提示词信息
         self.system_prompt = system_prompt or "You are pando, a helpful assistant."
