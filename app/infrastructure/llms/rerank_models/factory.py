@@ -1,6 +1,5 @@
 from typing import Dict, Type
 from app.infrastructure.llms.base_factory import BaseModelFactory
-from .baai_rank import BAAIRank
 from .baidu_yiyan_rank import BaiduYiyanRank
 from .base import BaseRank
 from .cohere_rank import CohereRank
@@ -19,6 +18,8 @@ class ReRankFactory(BaseModelFactory[BaseRank]):
 
     @property
     def _models(self) -> Dict[str, Type[BaseRank]]:
+        from .baai_rank import BAAIRank
+
         return {
             "baai": BAAIRank,
             "jina": OpenAIRank,

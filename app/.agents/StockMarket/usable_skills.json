@@ -1,0 +1,11 @@
+{
+  "skills": {
+    "memory-control": "allow",
+    "china-market-strategy": "allow",
+    "equity-etf-allocation": "allow",
+    "dividend-defensive-strategy": "allow",
+    "value-stock-picking": "allow",
+    "box-breakout-stock-trading": "allow"
+  },
+  "enable_extend": "no"
+}

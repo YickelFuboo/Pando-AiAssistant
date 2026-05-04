@@ -90,7 +90,7 @@ voyageai = "==0.2.3"
 zai-sdk = "==0.2.2" 
 google-genai = ">=1.0.0"
 FlagEmbedding = "1.2.10"
-torch = ">=2.5.0,<3.0.0"
+torch = ">=2.5.0,<2.10.0"
 tiktoken = "==0.7.0"
 
 # =============================================================================
@@ -199,7 +199,7 @@ mini-racer = ">=0.12.4,<0.13.0"
 
 [tool.poetry.group.full.dependencies]
 flagembedding = "==1.2.10"
-torch = ">=2.5.0,<3.0.0"
+torch = ">=2.5.0,<2.10.0"
 transformers = ">=4.40.0,<5.0.0"
 
 [tool.poetry.group.dev.dependencies]

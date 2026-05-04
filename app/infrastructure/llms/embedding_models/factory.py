@@ -1,6 +1,5 @@
 from typing import Dict, Type
 from app.infrastructure.llms.base_factory import BaseModelFactory
-from .baai_embed import BAAIEmbedding
 from .baidu_yiyan_embed import BaiduYiyanEmbed
 from .base import BaseEmbedding
 from .bedrock_embed import BedrockEmbed
@@ -22,6 +21,8 @@ class EmbeddingModelFactory(BaseModelFactory[BaseEmbedding]):
     
     @property
     def _models(self) -> Dict[str, Type[BaseEmbedding]]:
+        from .baai_embed import BAAIEmbedding
+
         return {
             "baai": BAAIEmbedding,
             "openai": OpenAIEmbed,

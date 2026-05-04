@@ -1,0 +1,6 @@
+{
+  "name_zh": "A股与港股市场策略助手",
+  "name_en": "China A-share and Hong Kong market strategy assistant",
+  "description_zh": "基于可复用 Skill 的 A 股与港股市场分析：总控资产配置与风控边界，并调度 ETF、红利防御、成长价值选股、箱体突破等子策略；输出偏量化与可核对。不构成投资建议。",
+  "description_en": "A-share and Hong Kong market analysis using versioned skills: top-level allocation and risk caps (china-market-strategy) plus ETF, dividend-defensive, value-stock, and box-breakout modules; prefers quantitative, auditable outputs. Not investment advice."
+}
